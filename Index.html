@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morse Canvas</title>
+    <style>
+        /* --- Basic Setup --- */
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            height: 100%;
+            width: 100%;
+            background-color: #0a0a0a; /* Dark background */
+        }
+
+        /* --- Canvas Styling --- */
+        #morseCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: -1; /* Place canvas behind UI */
+        }
+
+        /* --- UI Container --- */
+        .ui-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+            position: relative;
+            z-index: 1; /* Place UI on top of canvas */
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        /* --- Screen Visibility Control --- */
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            position: absolute; /* Remove from layout flow when hidden */
+        }
+
+        /* --- UI Element Styling --- */
+        h1 {
+            font-size: 2.5rem;
+            color: #03dac6;
+            text-shadow: 0 0 10px rgba(3, 218, 198, 0.5);
+            margin-bottom: 2rem;
+        }
+
+        textarea {
+            width: 90%;
+            max-width: 500px;
+            height: 120px;
+            background-color: rgba(20, 20, 20, 0.8);
+            color: #e0e0e0;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 1rem;
+            font-size: 1rem;
+            resize: none;
+            margin-bottom: 1.5rem;
+            backdrop-filter: blur(5px);
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #03dac6;
+        }
+        
+        button {
+            background-color: #03dac6;
+            color: #121212;
+            border: none;
+            border-radius: 8px;
+            padding: 0.8rem 1.5rem;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            min-width: 120px; /* Give buttons a consistent width */
+        }
+
+        button:hover {
+            background-color: #34efde;
+            box-shadow: 0 0 15px rgba(3, 218, 198, 0.6);
+        }
+
+        button:disabled {
+            background-color: #555;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 1rem; /* Space between buttons */
+            margin-top: 1rem;
+        }
+
+        #stop-button {
+             background-color: #ff5252;
+        }
+
+        #stop-button:hover {
+            background-color: #ff8a80;
+            box-shadow: 0 0 15px rgba(255, 82, 82, 0.6);
+        }
+
+        .secondary-button {
+            background-color: transparent;
+            color: #03dac6;
+            border: 2px solid #03dac6;
+        }
+
+        .secondary-button:hover {
+            background-color: rgba(3, 218, 198, 0.1);
+        }
+        
+        /* --- Result Screen Specifics --- */
+        #original-text-display {
+            font-size: 1.2rem;
+            color: #aaa;
+            word-wrap: break-word;
+            max-width: 90%;
+        }
+
+        #morse-code-display {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.5rem;
+            letter-spacing: 2px;
+            margin: 1.5rem 0;
+            color: #fff;
+            text-shadow: 0 0 5px #fff;
+            word-wrap: break-word;
+            max-width: 90%;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="morseCanvas"></canvas>
+
+    <!-- SCREEN 1: Input UI -->
+    <div id="input-screen" class="ui-container">
+        <h1>Morse Canvas</h1>
+        <textarea id="text-input" placeholder="Enter text to translate..."></textarea>
+        <button id="translate-button">Translate</button>
+    </div>
+
+    <!-- SCREEN 2: Result UI -->
+    <div id="result-screen" class="ui-container hidden">
+        <h1>Translation</h1>
+        <p id="original-text-display"></p>
+        <p id="morse-code-display"></p>
+        <div class="button-group">
+             <button id="play-button">Play</button>
+             <button id="stop-button" class="hidden">Stop</button>
+        </div>
+        <div class="button-group">
+            <button id="copy-button" class="secondary-button">Copy</button>
+            <button id="back-button" class="secondary-button">Back</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Morse Code Logic ---
+        const morseCodeMap = {
+            'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
+            'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
+            'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.',
+            'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+            'Y': '-.--', 'Z': '--..', '1': '.----', '2': '..---', '3': '...--',
+            '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..',
+            '9': '----.', '0': '-----', ' ': '/'
+        };
+
+        // --- DOM Elements ---
+        const inputScreen = document.getElementById('input-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const textInput = document.getElementById('text-input');
+        const translateButton = document.getElementById('translate-button');
+        const backButton = document.getElementById('back-button');
+        const copyButton = document.getElementById('copy-button');
+        const playButton = document.getElementById('play-button');
+        const stopButton = document.getElementById('stop-button');
+        const originalTextDisplay = document.getElementById('original-text-display');
+        const morseCodeDisplay = document.getElementById('morse-code-display');
+
+        // --- Canvas & Audio Setup ---
+        const canvas = document.getElementById('morseCanvas');
+        const ctx = canvas.getContext('2d');
+        let audioContext;
+        let isPlaying = false;
+        let visualSignals = [];
+        let currentOscillator = null;
+
+        // --- Sizing and resizing the canvas ---
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- Background Animation ---
+        let particles = [];
+        function createParticles() {
+            particles = [];
+            const particleCount = Math.floor((canvas.width * canvas.height) / 20000);
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.3,
+                    vy: (Math.random() - 0.5) * 0.3,
+                    radius: Math.random() * 2 + 1,
+                });
+            }
+        }
+        resizeCanvas();
+        createParticles();
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            createParticles();
+        });
+
+        // --- Main Animation Loop ---
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(3, 218, 198, 0.2)';
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            visualSignals.forEach((signal, index) => {
+                signal.opacity -= 0.02;
+                if (signal.opacity <= 0) {
+                    visualSignals.splice(index, 1);
+                } else {
+                    signal.draw();
+                }
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // --- Audio, Visual & Control Logic ---
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playTone(duration, frequency = 600) {
+            return new Promise(resolve => {
+                if (!audioContext || !isPlaying) { resolve(); return; }
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.value = frequency;
+                gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration/1000);
+                currentOscillator = oscillator;
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + duration/1000);
+                oscillator.onended = resolve;
+            });
+        }
+        
+        const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+        function drawDot() {
+            visualSignals.push({ opacity: 1.0, draw: function() { ctx.fillStyle = `rgba(3, 218, 198, ${this.opacity})`; ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 15, 0, Math.PI * 2); ctx.fill(); } });
+        }
+        function drawDash() {
+            visualSignals.push({ opacity: 1.0, draw: function() { ctx.fillStyle = `rgba(3, 218, 198, ${this.opacity})`; ctx.fillRect(canvas.width / 2 - 40, canvas.height / 2 - 7.5, 80, 15); } });
+        }
+        
+        async function playMorseSequence(morseCode) {
+            if (isPlaying) return;
+            isPlaying = true;
+            playButton.classList.add('hidden');
+            stopButton.classList.remove('hidden');
+            backButton.disabled = true;
+            copyButton.disabled = true;
+            const dotDuration = 150;
+            const dashDuration = dotDuration * 3;
+            const symbolGap = dotDuration;
+            const letterGap = dotDuration * 3;
+            const wordGap = dotDuration * 7;
+            for (const symbol of morseCode) {
+                if (!isPlaying) break;
+                switch (symbol) {
+                    case '.': drawDot(); await playTone(dotDuration); await sleep(symbolGap); break;
+                    case '-': drawDash(); await playTone(dashDuration); await sleep(symbolGap); break;
+                    case ' ': await sleep(letterGap - symbolGap); break;
+                    case '/': await sleep(wordGap - letterGap); break;
+                }
+            }
+            if (isPlaying) { stopPlayback(); }
+        }
+
+        function stopPlayback() {
+            isPlaying = false;
+            if(currentOscillator) { try { currentOscillator.stop(); } catch(e) {} currentOscillator = null; }
+            playButton.classList.remove('hidden');
+            stopButton.classList.add('hidden');
+            backButton.disabled = false;
+            copyButton.disabled = false;
+        }
+
+        // --- Event Listeners & Screen Navigation ---
+        translateButton.addEventListener('click', () => {
+            initAudio(); 
+            const originalText = textInput.value;
+            if (!originalText.trim()) return;
+            const morseCode = originalText.toUpperCase().split('').map(char => morseCodeMap[char] || '').join(' ');
+            originalTextDisplay.textContent = originalText;
+            morseCodeDisplay.textContent = morseCode;
+            inputScreen.classList.add('hidden');
+            resultScreen.classList.remove('hidden');
+        });
+
+        backButton.addEventListener('click', () => { if (!isPlaying) { resultScreen.classList.add('hidden'); inputScreen.classList.remove('hidden'); textInput.value = ''; } });
+        playButton.addEventListener('click', () => { playMorseSequence(morseCodeDisplay.textContent); });
+        stopButton.addEventListener('click', stopPlayback);
+
+        // --- FIXED Copy Button Logic ---
+        copyButton.addEventListener('click', () => {
+            if (copyButton.disabled) return;
+            
+            // Create a temporary textarea element to hold the text
+            const textArea = document.createElement("textarea");
+            textArea.value = morseCodeDisplay.textContent;
+            textArea.style.position = "fixed"; // Prevent scrolling to bottom of page
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.opacity = "0"; // Make it invisible
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            let success = false;
+            try {
+                success = document.execCommand('copy');
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+
+            document.body.removeChild(textArea);
+
+            // Provide user feedback
+            copyButton.textContent = success ? 'Copied!' : 'Error!';
+            copyButton.disabled = true;
+
+            setTimeout(() => {
+                copyButton.textContent = 'Copy';
+                if (!isPlaying) {
+                    copyButton.disabled = false;
+                }
+            }, 2000);
+        });
+
+    </script>
+</body>
+</html>
+
