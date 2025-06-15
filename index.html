@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morse Canvas</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <canvas id="morseCanvas"></canvas>
+
+    <!-- SCREEN 1: Input UI -->
+    <div id="input-screen" class="ui-container">
+        <h1>Morse Canvas</h1>
+        <textarea id="text-input" placeholder="Enter text to translate..."></textarea>
+        <button id="translate-button">Translate</button>
+    </div>
+
+    <!-- SCREEN 2: Result UI -->
+    <div id="result-screen" class="ui-container hidden">
+        <h1>Translation</h1>
+        <p id="original-text-display"></p>
+        <p id="morse-code-display"></p>
+        <div class="button-group">
+             <button id="play-button">Play</button>
+             <button id="stop-button" class="hidden">Stop</button>
+        </div>
+        <div class="button-group">
+            <button id="copy-button" class="secondary-button">Copy</button>
+            <button id="back-button" class="secondary-button">Back</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
